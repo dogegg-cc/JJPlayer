@@ -6,5 +6,5 @@
 //
 
 #if canImport(ffmpegkit)
-@_exported import ffmpegkit
+    @_exported import ffmpegkit
 #endif

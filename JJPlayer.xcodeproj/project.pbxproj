@@ -33,6 +33,7 @@
 		0F69F9902FBDB1A9001D6CF9 /* JJPlayerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JJPlayerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0F69FAAA2FBDB8C7001D6CF9 /* JJPlayerKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = JJPlayerKit; sourceTree = "<group>"; };
 		0F69FAB02FBDC5F2001D6CF9 /* .swiftlint.yml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = .swiftlint.yml; sourceTree = "<group>"; };
+		0F76596E2FBDCD8800939ACC /* .swiftformat */ = {isa = PBXFileReference; lastKnownFileType = text; path = .swiftformat; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -82,6 +83,7 @@
 		0F69F9702FBDB1A7001D6CF9 = {
 			isa = PBXGroup;
 			children = (
+				0F76596E2FBDCD8800939ACC /* .swiftformat */,
 				0F69FAB02FBDC5F2001D6CF9 /* .swiftlint.yml */,
 				0F69F97B2FBDB1A7001D6CF9 /* JJPlayer */,
 				0F69F9892FBDB1A9001D6CF9 /* JJPlayerTests */,
@@ -119,7 +121,8 @@
 				0F69F9752FBDB1A7001D6CF9 /* Sources */,
 				0F69F9762FBDB1A7001D6CF9 /* Frameworks */,
 				0F69F9772FBDB1A7001D6CF9 /* Resources */,
-				0F69FAAF2FBDC4E2001D6CF9 /* ShellScript */,
+				0F69FAAF2FBDC4E2001D6CF9 /* SwiftLint */,
+				0F76596D2FBDCD1F00939ACC /* SwiftFormat */,
 			);
 			buildRules = (
 			);
@@ -253,7 +256,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		0F69FAAF2FBDC4E2001D6CF9 /* ShellScript */ = {
+		0F69FAAF2FBDC4E2001D6CF9 /* SwiftLint */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -263,6 +266,7 @@
 			);
 			inputPaths = (
 			);
+			name = SwiftLint;
 			outputFileListPaths = (
 			);
 			outputPaths = (
@@ -270,6 +274,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "# 自动寻找 Homebrew 在 Apple Silicon (M1/M2/M3) 和 Intel Mac 下的安装路径\nif [[ \"$(uname -m)\" == \"arm64\" ]]; then\n    export PATH=\"/opt/homebrew/bin:$PATH\"\nelse\n    export PATH=\"/usr/local/bin:$PATH\"\nfi\n\n# 检查本地是否安装了 SwiftLint\nif which swiftlint >/dev/null; then\n    swiftlint\nelse\n    echo \"warning: SwiftLint not installed, download from https://github.com/realm/SwiftLint\"\nfi\n";
+		};
+		0F76596D2FBDCD1F00939ACC /* SwiftFormat */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = SwiftFormat;
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# 显式引入 Homebrew 路径\nexport PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\"\n\nif which swiftformat >/dev/null; then\n  echo \"Executing SwiftFormat on the entire project...\"\n  # 传入整个项目根目录 ${SRCROOT}，它会自动读取根目录下的 .swiftformat 配置文件\n  swiftformat \"${SRCROOT}\" --config \"${SRCROOT}/.swiftformat\"\nelse\n  echo \"warning: SwiftFormat is not installed. Please run 'brew install swiftformat' to enable auto-formatting.\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
