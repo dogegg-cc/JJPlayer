@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		0F69FAAE2FBDB9EB001D6CF9 /* JJPlayerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0F69FAAD2FBDB9EB001D6CF9 /* JJPlayerKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		0F69F9872FBDB1A9001D6CF9 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +31,8 @@
 		0F69F9792FBDB1A7001D6CF9 /* JJPlayer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JJPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0F69F9862FBDB1A9001D6CF9 /* JJPlayerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JJPlayerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0F69F9902FBDB1A9001D6CF9 /* JJPlayerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JJPlayerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0F69FAAA2FBDB8C7001D6CF9 /* JJPlayerKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = JJPlayerKit; sourceTree = "<group>"; };
+		0F69FAB02FBDC5F2001D6CF9 /* .swiftlint.yml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = .swiftlint.yml; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -52,6 +58,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0F69FAAE2FBDB9EB001D6CF9 /* JJPlayerKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,9 +82,11 @@
 		0F69F9702FBDB1A7001D6CF9 = {
 			isa = PBXGroup;
 			children = (
+				0F69FAB02FBDC5F2001D6CF9 /* .swiftlint.yml */,
 				0F69F97B2FBDB1A7001D6CF9 /* JJPlayer */,
 				0F69F9892FBDB1A9001D6CF9 /* JJPlayerTests */,
 				0F69F9932FBDB1A9001D6CF9 /* JJPlayerUITests */,
+				0F69FAA92FBDB8C7001D6CF9 /* Frameworks */,
 				0F69F97A2FBDB1A7001D6CF9 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -92,6 +101,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		0F69FAA92FBDB8C7001D6CF9 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				0F69FAAA2FBDB8C7001D6CF9 /* JJPlayerKit */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -102,6 +119,7 @@
 				0F69F9752FBDB1A7001D6CF9 /* Sources */,
 				0F69F9762FBDB1A7001D6CF9 /* Frameworks */,
 				0F69F9772FBDB1A7001D6CF9 /* Resources */,
+				0F69FAAF2FBDC4E2001D6CF9 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -112,6 +130,7 @@
 			);
 			name = JJPlayer;
 			packageProductDependencies = (
+				0F69FAAD2FBDB9EB001D6CF9 /* JJPlayerKit */,
 			);
 			productName = JJPlayer;
 			productReference = 0F69F9792FBDB1A7001D6CF9 /* JJPlayer.app */;
@@ -195,6 +214,8 @@
 			);
 			mainGroup = 0F69F9702FBDB1A7001D6CF9;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0F69F97A2FBDB1A7001D6CF9 /* Products */;
 			projectDirPath = "";
@@ -230,6 +251,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		0F69FAAF2FBDC4E2001D6CF9 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# 自动寻找 Homebrew 在 Apple Silicon (M1/M2/M3) 和 Intel Mac 下的安装路径\nif [[ \"$(uname -m)\" == \"arm64\" ]]; then\n    export PATH=\"/opt/homebrew/bin:$PATH\"\nelse\n    export PATH=\"/usr/local/bin:$PATH\"\nfi\n\n# 检查本地是否安装了 SwiftLint\nif which swiftlint >/dev/null; then\n    swiftlint\nelse\n    echo \"warning: SwiftLint not installed, download from https://github.com/realm/SwiftLint\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		0F69F9752FBDB1A7001D6CF9 /* Sources */ = {
@@ -399,12 +441,14 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = CFNBP9XPWJ;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -431,12 +475,14 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = CFNBP9XPWJ;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -578,6 +624,13 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0F69FAAD2FBDB9EB001D6CF9 /* JJPlayerKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JJPlayerKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 0F69F9712FBDB1A7001D6CF9 /* Project object */;
 }

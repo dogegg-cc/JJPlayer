@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "ffmpeg-kit-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/dogegg-cc/ffmpeg-kit-spm",
+      "state" : {
+        "branch" : "main",
+        "revision" : "e206e1f70073d7c61453faaeee00174b592a1af4"
+      }
+    }
+  ],
+  "version" : 2
+}

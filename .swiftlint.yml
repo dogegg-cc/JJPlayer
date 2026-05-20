@@ -1,0 +1,58 @@
+# ==============================================================================
+# SwiftLint Configuration File (.swiftlint.yml)
+# ==============================================================================
+# Enforces professional modern Swift 5.9+ / Swift 6 style guidelines 
+# optimized for iOS and system framework library developments.
+# ==============================================================================
+
+# 禁用的默认规则（根据实际生产需要，放宽某些限制以提升开发体验）
+disabled_rules:
+  - trailing_whitespace        # 允许行尾空格，减少无谓的代码格式化冲突
+  - todo                       # 允许在代码中书写 TODO 和 FIXME 注释
+  - identifier_name            # 放宽命名长度限制（例如允许底层 C 映射出的短变量名 x, y, i）
+
+# 开启的推荐规则（使代码更加严谨和安全）
+opt_in_rules:
+  - empty_count                # 强制使用 .isEmpty 而非 .count == 0 提升性能
+  - force_unwrapping           # 严格限制强制解包 (Error)
+  - fatal_error_message        # fatalError 必须带上具体的调试日志
+  - array_init                 # 推荐使用 [Element]() 简写进行数组初始化
+  - first_where                # 推荐使用 .first(where:) 代替 .filter().first 以提升查询性能
+  - implicitly_unwrapped_optional # 警告隐式可选类型的使用
+
+# 自定义具体约束
+line_length:
+  warning: 140
+  error: 180
+  ignores_comments: true       # 忽略注释的每行长度限制
+  ignores_urls: true           # 忽略 URL 的每行长度限制
+
+# 类型与函数嵌套限制
+function_body_length:
+  warning: 60
+  error: 100
+
+type_body_length:
+  warning: 300
+  error: 500
+
+# 命名规范长度控制
+type_name:
+  min_length: 3
+  max_length: 40
+
+# 强类型安全控制 (编译级 Error，防止 App 运行时崩溃)
+force_cast: error             # 严禁使用 as! 强制类型转换
+force_try: error              # 严禁使用 try! 强制执行捕获
+
+# 包含扫描的文件夹（仅扫描本地开发包 JJPlayerKit，自动忽略主工程及测试目录）
+included:
+  - JJPlayerKit
+
+# 排除不需要检查的文件夹
+excluded:
+  - .build
+  - .swiftpm
+  - DerivedData
+  - Tests
+  - Package.swift
