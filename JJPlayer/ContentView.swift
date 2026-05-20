@@ -426,7 +426,3 @@ struct StudyNotesCard: View {
         )
     }
 }
-
-#Preview {
-    ContentView()
-}
