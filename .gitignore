@@ -20,8 +20,6 @@ Icon\r
 .com.apple.timemachine.donotpresent
 .temporary
 .inherited-configuration
-build.log
-xcodebuild.log
 
 # ------------------------------------------
 # Xcode 个人配置与缓存文件 (保留工程文件，忽略个人专属配置)
@@ -43,6 +41,7 @@ build/
 *.ipa
 *.dSYM.zip
 *.dSYM
+*.log
 
 # ------------------------------------------
 # Swift Package Manager (SPM) 临时文件
