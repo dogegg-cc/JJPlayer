@@ -30,10 +30,10 @@ public final class JJPlayer: ObservableObject {
     @Published public private(set) var videoCodec: String = "Unknown"
 
     /// 当前解码出的 iOS CoreVideo 视频帧的 CGImage，绑定至原生 SwiftUI 图像层高速直出渲染
-    @Published public private(set) var currentFrame: CGImage? = nil
+    @Published public private(set) var currentFrame: CGImage?
 
     // 持有底层解复用与解码控制核心，保证在播放生命周期中不被提前释放
-    private var activeDemuxer: JJDemuxer? = nil
+    private var activeDemuxer: JJDemuxer?
 
     // 后台高优先级解码专用线程队列
     private let decodeQueue = DispatchQueue(label: "cc.dogegg.JJPlayer.decode", qos: .userInteractive)
