@@ -21,13 +21,13 @@
 ```mermaid
 graph TD
     A[阶段一: 解复用与元数据探测] -->|已 100% 攻克| B[阶段二: 视频解码与硬件渲染]
-    B -->|进行中| C[阶段三: 音频解码与 AudioQueue]
-    C --> D[阶段四: 高精度音视频同步]
+    B -->|已 100% 攻克| C[阶段三: 音频解码与 AudioQueue]
+    C -->|进行中| D[阶段四: 高精度音视频同步]
     D --> E[阶段五: 拟物炫彩播放器 UI]
     style A fill:#4CAF50,stroke:#388E3C,stroke-width:2px,color:#fff
     style B fill:#4CAF50,stroke:#388E3C,stroke-width:2px,color:#fff
-    style C fill:#2196F3,stroke:#1976D2,stroke-width:2px,color:#fff
-    style D fill:#FF9800,stroke:#F57C00,stroke-width:2px,color:#fff
+    style C fill:#4CAF50,stroke:#388E3C,stroke-width:2px,color:#fff
+    style D fill:#2196F3,stroke:#1976D2,stroke-width:2px,color:#fff
     style E fill:#E91E63,stroke:#C2185B,stroke-width:2px,color:#fff
 ```
 
@@ -67,19 +67,36 @@ graph TD
 
 ---
 
-### 🟪 阶段三：硬核音频解码与 PCM 队列连续播放 (Audio Decoding & Queue Playing)
-> **状态**：🔄 进行中，正全力吹响音频攻坚战的号角！
-> **学习目标**：理解数字音频原理（采样率、声道数、位深），搞懂音频解码与 iOS 极佳的低延迟音频通道 `AudioQueue`，并在 Swift 底层实现极致平滑的 PCM 队列供给。
+### 🟪 阶段三：硬核音频解码与 iOS 底层 AudioQueue 队列连续播放 (Audio Decoding & Queue Playing)
+> **状态**：✅ 100% 已攻克，硬核重构与防御机制完美收官！
+> **学习目标**：理解数字音频原理（采样率、声道数、位深），搞懂音频解码与 iOS 极佳的低延迟音频通道 `AudioQueue`，并在 Swift 底层实现极致平滑的 PCM 队列供给，确保实时性与线程同步的高效配合。
 
-- [ ] **音频解码器初始化**：创建音频解码上下文并匹配编解码器（如 AAC/MP3）。
-- [ ] **PCM 重新采样 (swr)**：使用 `libswresample` 将解码出来的任意音频流重采样为 iOS 系统原生支持的 PCM 格式（如 44.1kHz, 16bit 双声道）。
-- [ ] **AudioQueue 播放驱动**：初始化 iOS 原生的音频驱动引擎 `AudioQueueRef`，配置音频数据缓冲区（Buffers）。
-- [ ] **环形音频缓冲区**：设计高效的多缓冲区交替读写队列，在回调函数（Callback）中持续为 AudioQueue 填入 PCM 音频流，实现无缝连续发声。
+- [x] **音频解码器初始化**：创建音频解码上下文并匹配编解码器（如 AAC/MP3）。
+- [x] **PCM 重新采样 (swr)**：使用 `libswresample` 将解码出来的任意音频流重采样为 iOS 系统原生支持的 PCM 格式（如 44.1kHz, 16bit 双声道交错型 S16 格式）。
+- [x] **AudioQueue 播放驱动**：初始化 iOS 原生的音频驱动引擎 `AudioQueueRef`，预分配 **3 个循环 AudioQueueBufferRef**（每个 16KB），实现滚动供料与连续播放。
+- [x] **异步生产-消费队列与动态流量控制**：设计高吞吐量、线程安全的音频 PCM 字节队列 `audioBuffer`。引入**动态水位流量控制（Flow Control）**：当缓冲区水位超过 256KB（相当于 1.5s 缓存）时，自适应挂起解码线程 33ms，彻底解决 CPU 空转飙高与内存爆堆隐患，消灭 Underflow 爆音。
+- [x] **Darwin os_unfair_lock 物理重构**：弃用存在优先级反转（Priority Inversion）隐患的 `NSLock`，在 Swift 层面引入苹果最推崇的 4 字节高性能低级锁 `os_unfair_lock`。提供自适应优先级继承，保证高 QoS 声卡实时线程绝不被低 QoS 解码线程拖垮。
+- [x] **整型截断与越界写防御机制**：针对 `av_rescale_rnd` 的 64 位转换计算引入**阈值哨兵（Threshold Guard）**。当单帧重采样采样点超出极值边界（100k）判定为恶意或损坏帧并安全丢弃，筑牢底层内存安全的铜墙铁壁。
+
+#### 🧠 【阶段三硬核避坑与攻坚研讨秘籍】
+在阶段三的音视频联调中，我们探索出了底层实时音频架构的四大黄金防线：
+1. **多流抢包冲突（EOF 抢包死锁巨坑）**：
+   * *现象*：视频解码与音频解码各自跑独立的读取包线程。它们在底层同时调用 `av_read_frame` 会导致互相抢占对方的流包，抢错后丢弃数据，引起播放极度卡顿、画面死锁。
+   * *避坑*：**统一一站式解复用读取 + 双闭包分发**。在 C 核心中保持单路 `av_read_frame`，解包后根据流类型判断直接通过 ObjC Block 分发给 Swift 对应的生产者队列，物理终结了抢包可能。
+2. **AudioQueue 系统回调线程阻塞（爆音与喀哒破音元凶）**：
+   * *现象*：在 `AudioQueue` 的声卡索要数据回调（Callback）中直接执行 I/O 读取或 FFmpeg 计算，因线程等待发生 Audio Underflow（饿死），声卡播放断层传出刺耳爆音。
+   * *避坑*：**异步生产-消费队列**。后台解码线程作为“生产者”拼命追加数据，声卡回调作为“消费者”仅在内存中执行 0ms 拷贝，缺货时以 memset 0 静音填充，杜绝线程挂起。
+3. **高频锁碰撞与优先级反转（线程卡死隐忧）**：
+   * *现象*：声卡回调在实时 QoS 下运行，解码器在普通 QoS 下运行。使用传统 `NSLock`，如果解码器持有锁时被其他普通线程抢占 CPU，高优先级的声卡回调会因为锁被抢占而长久阻塞，引起优先级反转卡死。
+   * *避坑*：**os_unfair_lock 原生防反转**。弃用高级 Objective-C 锁，引入轻量化 Darwin 底层锁 `os_unfair_lock`。当高优先级等待发生时，内核会自动继承并将解码线程提升至实时优先级，杜绝了反转隐患。
+4. **异常损坏数据与内存越界写（溢出崩溃隐忧）**：
+   * *现象*：媒体文件遭恶意修改或损坏，`av_rescale_rnd` 的 `int64_t` 大值被隐式强转 `int` 发生整型截断。退化为负数或极小值，传递给 `swr_convert` 后引起缓冲区溢出，内存踩踏导致 App Crash。
+   * *避坑*：**引入阈值哨兵（Threshold Guard）**。使用 `int64_t` 安全承接，增加校验 `if (samples <= 0 || samples > 100000)` 安全过滤机制，从物理源头切断错误参数传递。
 
 ---
 
 ### 🟧 阶段四：音视频高精度同步控制 (AV Sync & Clock Master)
-> **状态**：📅 待启动（任务 5）
+> **状态**：🔄 进行中，正全力吹响高精度声画同步战役的号角！
 > **学习目标**：攻克音视频开发中最硬核的技术山峰——时钟同步。理解 DTS（解码时间戳）与 PTS（显示时间戳）的差别，并在 UIKit 核心播放回路中实现极致精准的同步策略。
 
 - [ ] **音频播放时钟维持**：在音频连续播放过程中，实时计算并返回当前的音频时间基准（Audio PTS）作为 Master Clock。
