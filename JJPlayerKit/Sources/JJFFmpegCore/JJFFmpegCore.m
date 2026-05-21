@@ -398,9 +398,17 @@
                 // 成功解码出一帧 YUV 帧！立即重排颜色直出 iOS 原生 CVPixelBuffer
                 CVPixelBufferRef pixelBuffer = [self convertFrameToPixelBuffer:_videoFrame];
                 if (pixelBuffer) {
+                    // 💥【阶段四：高精度时钟同步】换算视频帧的显示时间戳（PTS，以秒为单位）
+                    double ptsSeconds = 0.0;
+                    if (_videoFrame->best_effort_timestamp != AV_NOPTS_VALUE) {
+                        ptsSeconds = _videoFrame->best_effort_timestamp * av_q2d(_formatContext->streams[_videoStreamIndex]->time_base);
+                    } else if (_videoFrame->pts != AV_NOPTS_VALUE) {
+                        ptsSeconds = _videoFrame->pts * av_q2d(_formatContext->streams[_videoStreamIndex]->time_base);
+                    }
+                    
                     // 若 Swift 注册了视频渲染闭包，直接高效率回调抛给 Swift 强安全接管
                     if (self.onVideoFrameDecoded) {
-                        self.onVideoFrameDecoded(pixelBuffer);
+                        self.onVideoFrameDecoded(pixelBuffer, ptsSeconds);
                     }
                     // 核心内存防线：Swift 侧 takeRetainedValue() 会接管引用计数，在此安全释放 ObjC 侧强引用
                     CVPixelBufferRelease(pixelBuffer);
@@ -442,10 +450,18 @@
                     // 3. 计算实际产出的交错型 PCM 字节大小：采样点数 * 双声道 * 2字节(16-bit)
                     int pcmBytes = convertedSamples * 2 * 2;
                     
+                    // 💥【阶段四：高精度时钟同步】换算音频帧的起始时间戳（PTS，以秒为单位）
+                    double ptsSeconds = 0.0;
+                    if (_audioFrame->best_effort_timestamp != AV_NOPTS_VALUE) {
+                        ptsSeconds = _audioFrame->best_effort_timestamp * av_q2d(_formatContext->streams[_audioStreamIndex]->time_base);
+                    } else if (_audioFrame->pts != AV_NOPTS_VALUE) {
+                        ptsSeconds = _audioFrame->pts * av_q2d(_formatContext->streams[_audioStreamIndex]->time_base);
+                    }
+                    
                     // 4. 包装为零拷贝的 NSData，派发回调抛出给 Swift 的生产者队列
                     if (self.onAudioFrameDecoded) {
                         NSData *pcmData = [NSData dataWithBytesNoCopy:_audioOutBuffer length:pcmBytes freeWhenDone:NO];
-                        self.onAudioFrameDecoded(pcmData);
+                        self.onAudioFrameDecoded(pcmData, ptsSeconds);
                     }
                 }
                 processedStatus = 0; // 成功处理了音频帧

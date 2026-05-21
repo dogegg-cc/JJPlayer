@@ -70,22 +70,22 @@ public final class JJDemuxer {
         try bridge.initializeDecoders()
     }
 
-    /// 注册视频解码直刷分发闭包
-    public func setVideoCallback(_ callback: @escaping (CVPixelBuffer) -> Void) {
-        bridge.onVideoFrameDecoded = { unmanagedPixelBuffer in
+    /// 注册视频解码直刷分发闭包（携带 PTS 时间戳，以秒为单位）
+    public func setVideoCallback(_ callback: @escaping (CVPixelBuffer, Double) -> Void) {
+        bridge.onVideoFrameDecoded = { unmanagedPixelBuffer, pts in
             // unmanagedPixelBuffer 由底层 C/ObjC 传入，我们在 Swift 强安全接管并转换
             if let pixelBuffer = unmanagedPixelBuffer {
-                callback(pixelBuffer)
+                callback(pixelBuffer, pts)
             }
         }
     }
 
-    /// 注册音频解码重采样直刷分发闭包
-    public func setAudioCallback(_ callback: @escaping (Data) -> Void) {
-        bridge.onAudioFrameDecoded = { pcmData in
+    /// 注册音频解码重采样直刷分发闭包（携带 PTS 时间戳，以秒为单位）
+    public func setAudioCallback(_ callback: @escaping (Data, Double) -> Void) {
+        bridge.onAudioFrameDecoded = { pcmData, pts in
             // pcmData 作为 NSData 桥接为 Swift 的 Data 字节段
             if let pcm = pcmData {
-                callback(pcm)
+                callback(pcm, pts)
             }
         }
     }

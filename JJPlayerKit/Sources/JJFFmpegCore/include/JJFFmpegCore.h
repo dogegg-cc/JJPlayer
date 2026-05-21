@@ -19,9 +19,9 @@
 @property (nonatomic, readonly) int videoStreamIndex;
 @property (nonatomic, readonly) int audioStreamIndex;
 
-// 双通道统一分发闭包回调
-@property (nonatomic, copy) void (^onVideoFrameDecoded)(CVPixelBufferRef pixelBuffer);
-@property (nonatomic, copy) void (^onAudioFrameDecoded)(NSData *pcmData);
+// 双通道统一分发闭包回调（带绝对 PTS 浮点秒时间戳）
+@property (nonatomic, copy) void (^onVideoFrameDecoded)(CVPixelBufferRef pixelBuffer, double pts);
+@property (nonatomic, copy) void (^onAudioFrameDecoded)(NSData *pcmData, double pts);
 
 // 打开多媒体输入源并探测流信息
 - (BOOL)openURL:(NSString *)url error:(NSError **)error;

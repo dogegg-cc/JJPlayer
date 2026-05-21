@@ -93,6 +93,21 @@ public final class JJAudioQueuePlayer {
         }
     }
 
+    /// 获取当前声卡正在物理发声的播放时间（秒）
+    /// 💥【高精度硬件时钟】基于 AudioQueueGetCurrentTime，在声卡硬件层面直接精确读取已发声的 sample 点数，
+    /// 天然完美剔除了 3 个 16KB 排队 Buffer 积压造成的播放延迟（Latency Calibration），为 AV Sync 提供了声卡级绝对精度。
+    public var currentPlaybackTime: Double {
+        guard let queue = audioQueue else { return 0.0 }
+        var time = AudioTimeStamp()
+        // 获取声卡正在发声的硬件时间戳，不需要 timelineRef 辅助
+        let status = AudioQueueGetCurrentTime(queue, nil, &time, nil)
+        if status == noErr, time.mFlags.contains(.sampleTimeValid) {
+            // 已播放采样点数 / 采样率 = 绝对已播放秒数
+            return Double(time.mSampleTime) / 44100.0
+        }
+        return 0.0
+    }
+
     // --------------------------------------------------
 
     // MARK: - 私有物理底座搭建
@@ -173,14 +188,15 @@ public final class JJAudioQueuePlayer {
 
     /// 底层声卡回调投喂核心实现
     fileprivate func handleBufferCallback(_ aq: AudioQueueRef, _ buffer: AudioQueueBufferRef) {
-        guard isRunning else { return }
-
         // 1. 计算当前 Buffer 最大能吞下的 PCM 字节深度
         let capacity = Int(buffer.pointee.mAudioDataBytesCapacity)
 
         // 2. 0ms 极速从 Swift 生产者缓冲中“提货”
         var pcmData = Data()
-        if let requester = pcmDataRequester {
+        // 💥【阶段四高精避坑】只有当正处于物理发声状态时才提取实际音频数据；
+        // 若处于暂停或停止状态，我们绝不能让 Buffer 丢失，必须以 memset 静音数据进行填充并重新 Enqueue 送回声卡，
+        // 从而完美维持 3 个循环 Buffer 物理传送带不发生断裂，消除快速暂停/播放下的回调挂死！
+        if isRunning, let requester = pcmDataRequester {
             pcmData = requester(capacity)
         }
 
@@ -195,7 +211,7 @@ public final class JJAudioQueuePlayer {
             // 更新当前缓冲区实际填入的 PCM 字节长度
             buffer.pointee.mAudioDataByteSize = UInt32(pcmData.count)
         } else {
-            // 提货空虚（缓冲区饿死，多见于网络流卡顿）：填充全零静音，杜绝声卡Underflow物理喀哒爆音！
+            // 提货空虚（缓冲区饿死，多见于网络流卡顿/暂停）：填充全零静音，维持声卡流水线且杜绝爆音！
             memset(buffer.pointee.mAudioData, 0, capacity)
             buffer.pointee.mAudioDataByteSize = UInt32(capacity)
         }

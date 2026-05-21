@@ -5,6 +5,4 @@
 //  Created by Antigravity.
 //
 
-#if canImport(ffmpegkit)
-    @_exported import ffmpegkit
-#endif
+import Foundation
