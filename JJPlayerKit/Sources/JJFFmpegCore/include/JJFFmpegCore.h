@@ -19,18 +19,27 @@
 @property (nonatomic, readonly) int videoStreamIndex;
 @property (nonatomic, readonly) int audioStreamIndex;
 
+// 双通道统一分发闭包回调
+@property (nonatomic, copy) void (^onVideoFrameDecoded)(CVPixelBufferRef pixelBuffer);
+@property (nonatomic, copy) void (^onAudioFrameDecoded)(NSData *pcmData);
+
 // 打开多媒体输入源并探测流信息
 - (BOOL)openURL:(NSString *)url error:(NSError **)error;
 
 // 关闭输入源释放核心 C 对象资源
 - (void)close;
 
-// 【阶段二：视频解码与渲染】
-// 初始化并打开视频解码器上下文
-- (BOOL)initializeVideoDecoder:(NSError **)error;
+// 【旧接口已废弃】请使用一站式 initializeDecoders: 与 decodeAndDispatch
+- (BOOL)initializeVideoDecoder:(NSError **)error __attribute__((deprecated("请使用一站式 initializeDecoders:")));
+- (CVPixelBufferRef)decodeNextFrame __attribute__((deprecated("请使用一站式 decodeAndDispatch")));
 
-// 解码并提取下一帧视频图像，返回 iOS 原生的 CoreVideo 像素缓冲区 CVPixelBufferRef
-- (CVPixelBufferRef)decodeNextFrame;
+// 【阶段三：一站式音视频双路解码分发】
+// 同时初始化并打开视频与音频解码器上下文，配置 libswresample 重采样
+- (BOOL)initializeDecoders:(NSError **)error;
+
+// 一站式读取、解码并分发单个数据包
+// 返回值：0 代表成功处理视频帧/音频帧；1 代表处理了无关数据包；-1 代表流读取结束(EOF)或出错
+- (int)decodeAndDispatch;
 
 @end
 

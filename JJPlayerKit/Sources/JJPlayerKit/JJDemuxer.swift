@@ -8,7 +8,7 @@
 import Foundation
 import JJFFmpegCore
 
-/// 底层媒体流解复用器 (Demuxer)
+/// 底层媒体流解复用器 (Demuxer) 与一站式双流解码控制器
 ///
 /// 【学习笔记 - 解复用器在播放器中的地位】
 /// 解复用器 (Demuxer) 是任何视频播放器流水线的「排头兵」。
@@ -25,7 +25,6 @@ public final class JJDemuxer {
     private let bridge = JJFFmpegBridge()
 
     /// 视频流的索引位置，若无视频流则为 -1
-    /// 通过计算属性安全屏蔽了底层的 int 转换，直接输出标准的 Swift Int
     public var videoStreamIndex: Int { Int(bridge.videoStreamIndex) }
 
     /// 音频流的索引位置，若无音频流则为 -1
@@ -50,9 +49,6 @@ public final class JJDemuxer {
 
     /// 使用底层 C 接口异步打开视频输入源，并探测多媒体流的深度细节
     ///
-    /// 这是播放器的首次 I/O 交互，如果打开的是网络流，该方法可能产生可预知的网络阻断或 403 Forbidden 错误。
-    /// 错误会通过底层的 NSError 封装并直接通过 `throws` 机制优雅抛给 Swift 的调用者。
-    ///
     /// - Parameter url: 本地路径 (POSIX 绝对路径) 或网络流 URL 字符串
     public func open(url: String) throws {
         try bridge.openURL(url)
@@ -65,26 +61,38 @@ public final class JJDemuxer {
 
     // ==============================================================================
 
-    // MARK: - 【阶段二：视频解码与渲染桥接接口】
+    // MARK: - 【阶段三：一站式双路解码与 Block 分发接口】
 
     // ==============================================================================
 
-    /// 激活底层 C 语言视频解码通道，分配解码器上下文
-    public func initializeVideoDecoder() throws {
-        try bridge.initializeVideoDecoder()
+    /// 激活底层 C 语言视频与音频解码物理通道，分配合适的编解码及 Swr 重采样上下文
+    public func initializeDecoders() throws {
+        try bridge.initializeDecoders()
     }
 
-    /// 从媒体流中抽取数据包并解码出下一帧原始视频图像 (CVPixelBuffer)
-    ///
-    /// 【学习笔记 - Swift-C 混编的 Unmanaged 内存转移】
-    /// 在 C 世界分配的 CVPixelBufferRef 在 ObjC 桥接中返回时为 `Unmanaged<CVPixelBuffer>` 可选类型。
-    /// 在 Swift 中，我们必须使用 `takeRetainedValue()`。这句神奇的代码会向 Swift 编译器声明：
-    /// “将底层 C 分配的内存所有权直接移转并 Retain 给 Swift ARC 自动引用计数”。
-    /// 自此，这一块物理显存缓冲区将被 Swift 强安全接管，并在离开作用域时 100% 自动被 ARC 销毁，优雅杜绝了 C 级泄露。
-    ///
-    /// - Returns: 解码好的 iOS 硬件兼容像素缓冲区，若读完流或出错则返回 nil
-    public func decodeNextFrame() -> CVPixelBuffer? {
-        guard let unmanaged = bridge.decodeNextFrame() else { return nil }
-        return unmanaged.takeRetainedValue()
+    /// 注册视频解码直刷分发闭包
+    public func setVideoCallback(_ callback: @escaping (CVPixelBuffer) -> Void) {
+        bridge.onVideoFrameDecoded = { unmanagedPixelBuffer in
+            // unmanagedPixelBuffer 由底层 C/ObjC 传入，我们在 Swift 强安全接管并转换
+            if let pixelBuffer = unmanagedPixelBuffer {
+                callback(pixelBuffer)
+            }
+        }
+    }
+
+    /// 注册音频解码重采样直刷分发闭包
+    public func setAudioCallback(_ callback: @escaping (Data) -> Void) {
+        bridge.onAudioFrameDecoded = { pcmData in
+            // pcmData 作为 NSData 桥接为 Swift 的 Data 字节段
+            if let pcm = pcmData {
+                callback(pcm)
+            }
+        }
+    }
+
+    /// 从媒体流中统一读取单个数据包并解码分发
+    /// 返回值：0 代表成功处理视频帧/音频帧；1 代表处理了无关数据包；-1 代表流读取结束(EOF)或出错
+    public func decodeAndDispatch() -> Int32 {
+        bridge.decodeAndDispatch()
     }
 }
