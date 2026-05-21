@@ -49,7 +49,8 @@ public final class JJPlayer: ObservableObject {
     // 【阶段三新增：线程安全音频缓冲队列与 AudioQueue 实例】
     // --------------------------------------------------
     // 线程安全锁，保障后台解码线程追加 PCM 与系统声卡回调消费互斥，杜绝多线程数据竞争
-    private let audioLock = NSLock()
+    // 💥【重大优化：使用 Darwin 原生高性能 os_unfair_lock 杜绝优先级反转与卡顿】
+    private let audioLock = JJUnfairLock()
 
     // 高吞吐量音频 PCM 帧数据追加队列
     private var audioBuffer = Data()

@@ -29,10 +29,6 @@
 // 关闭输入源释放核心 C 对象资源
 - (void)close;
 
-// 【旧接口已废弃】请使用一站式 initializeDecoders: 与 decodeAndDispatch
-- (BOOL)initializeVideoDecoder:(NSError **)error __attribute__((deprecated("请使用一站式 initializeDecoders:")));
-- (CVPixelBufferRef)decodeNextFrame __attribute__((deprecated("请使用一站式 decodeAndDispatch")));
-
 // 【阶段三：一站式音视频双路解码分发】
 // 同时初始化并打开视频与音频解码器上下文，配置 libswresample 重采样
 - (BOOL)initializeDecoders:(NSError **)error;

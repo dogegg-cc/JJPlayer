@@ -187,20 +187,6 @@
 }
 
 // ==============================================================================
-// MARK: - 【旧单路接口物理桥接兜底 (已废弃)】
-// ==============================================================================
-
-- (BOOL)initializeVideoDecoder:(NSError **)error {
-    return [self initializeDecoders:error];
-}
-
-- (CVPixelBufferRef)decodeNextFrame {
-    // 抛出警告，旧的直接抢包机制极易导致 EOF 破坏，引导切换至 decodeAndDispatch
-    DLog(@"⚠️ [JJFFmpegBridge] decodeNextFrame 旧单路接口已被调用！建议升级至一站式 decodeAndDispatch");
-    return NULL;
-}
-
-// ==============================================================================
 // MARK: - 【阶段三：一站式音视频双路解码分发核心实现】
 // ==============================================================================
 
@@ -431,12 +417,19 @@
         if (ret >= 0) {
             ret = avcodec_receive_frame(_audioCodecContext, _audioFrame);
             if (ret == 0) {
-                // 成功收获音频帧！
-                // 1. 动态计算本次重采样所需的精准目标采样点空间，防范转换溢出
-                int outSamples = av_rescale_rnd(swr_get_delay(_swrContext, _audioFrame->sample_rate) + _audioFrame->nb_samples,
-                                                44100,
-                                                _audioFrame->sample_rate,
-                                                AV_ROUND_UP);
+                // 1. 使用 64 位整型安全接收重采样大小计算结果，防范溢出与损坏数据
+                int64_t rescaledSamples = av_rescale_rnd(swr_get_delay(_swrContext, _audioFrame->sample_rate) + _audioFrame->nb_samples,
+                                                         44100,
+                                                         _audioFrame->sample_rate,
+                                                         AV_ROUND_UP);
+                
+                // 💥【安全防线：阈值哨兵】若计算出的采样点数小于等于0，或超过物理最大阈值（100,000），判定为损坏数据，安全跳过
+                if (rescaledSamples <= 0 || rescaledSamples > 100000) {
+                    av_packet_unref(_packet);
+                    return 1; // 丢弃该异常帧，平滑驱动至下一包，杜绝崩溃与内存越界
+                }
+                
+                int outSamples = (int)rescaledSamples;
                 
                 // 2. 执行底层的物理格式重采样，将 Planar 等不兼容格式转换为 standard PCM
                 int convertedSamples = swr_convert(_swrContext,
