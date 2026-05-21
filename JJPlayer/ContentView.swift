@@ -8,7 +8,11 @@
 import JJPlayerKit
 import SwiftUI
 
-/// 播放器媒体探测主视图 (重构后：遵循单一职责原则，实现高度组件化)
+// ==============================================================================
+
+// MARK: - 主骨架入口视图 (极致组件化：主视图 body 仅有 16 行声明式组合，完全遵循 SRP)
+
+// ==============================================================================
 struct ContentView: View {
     // 实例化底层的播放控制核心
     @StateObject private var player = JJPlayer()
@@ -35,6 +39,12 @@ struct ContentView: View {
                     // 组件 4：核心引擎状态与元数据监测面板 (毛玻璃拟物卡片)
                     StatusPanel(player: player)
 
+                    // 组件 4.5：阶段二高吞吐硬件加速播放与控制台 (就绪/播放中/暂停/完成状态下淡入展示)
+                    if player.state == .ready || player.state == .playing || player.state == .paused || player.state == .completed {
+                        VideoPlayerCard(player: player)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+
                     // 组件 5：FFmpeg 学习笔记提示栏
                     StudyNotesCard()
                 }
@@ -45,8 +55,11 @@ struct ContentView: View {
     }
 }
 
+// ==============================================================================
+
 // MARK: - 1. 背景组件 (单一职责：炫彩渐变与动态光晕)
 
+// ==============================================================================
 struct BackgroundGradientView: View {
     var body: some View {
         ZStack {
@@ -83,8 +96,11 @@ struct BackgroundGradientView: View {
     }
 }
 
+// ==============================================================================
+
 // MARK: - 2. 头部组件 (单一职责：主副标题渲染)
 
+// ==============================================================================
 struct HeaderSection: View {
     var body: some View {
         VStack(spacing: 8) {
@@ -106,58 +122,55 @@ struct HeaderSection: View {
     }
 }
 
-// MARK: - 3. 媒体输入组件 (单一职责：地址输入与加载触发按钮)
+// ==============================================================================
 
+// MARK: - 3. 拟物化毛玻璃卡片容器 (通用样式抽象，杜绝卡片边框/阴影的重复代码)
+
+// ==============================================================================
+struct GlassCard<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(20)
+            .background(.ultraThinMaterial)
+            .cornerRadius(20)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.2), radius: 15, x: 0, y: 10)
+    }
+}
+
+// ==============================================================================
+
+// MARK: - 4. 媒体输入组件 (单一职责：地址输入与加载触发按钮组合)
+
+// ==============================================================================
 struct MediaInputCard: View {
     @Binding var mediaPath: String
     @ObservedObject var player: JJPlayer
     @Binding var isAnalyzing: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("输入媒体源 (本地路径 / 网络 URL)")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundColor(.white.opacity(0.8))
+        GlassCard {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("输入媒体源 (本地路径 / 网络 URL)")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.8))
 
-            // URL 文本输入行
-            HStack(spacing: 12) {
-                Image(systemName: "link.circle.fill")
-                    .foregroundColor(.blue)
-                    .font(.title3)
+                // 输入单行组件
+                MediaInputField(mediaPath: $mediaPath)
 
-                TextField("请输入视频地址...", text: $mediaPath)
-                    .foregroundColor(.white)
-                    .font(.system(size: 14, design: .monospaced))
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-
-                if !mediaPath.isEmpty {
-                    Button(action: { mediaPath = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.white.opacity(0.4))
-                    }
-                }
+                // 动作按钮组件
+                ActionButton(player: player, action: triggerAnalysis)
             }
-            .padding(.vertical, 14)
-            .padding(.horizontal, 16)
-            .background(Color.white.opacity(0.06))
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
-            )
-
-            // 解析控制按钮
-            ActionButton(player: player, action: triggerAnalysis)
         }
-        .padding(20)
-        .background(.ultraThinMaterial)
-        .cornerRadius(20)
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.2), radius: 15, x: 0, y: 10)
     }
 
     private func triggerAnalysis() {
@@ -168,8 +181,50 @@ struct MediaInputCard: View {
     }
 }
 
-// MARK: - 3.1 动作触发按钮 (单一职责：解析加载状态与按钮交互)
+// ==============================================================================
 
+// MARK: - 4.1 媒体源输入行组件 (单一职责：输入控制与清除功能)
+
+// ==============================================================================
+struct MediaInputField: View {
+    @Binding var mediaPath: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "link.circle.fill")
+                .foregroundColor(.blue)
+                .font(.title3)
+
+            TextField("请输入视频地址...", text: $mediaPath)
+                .foregroundColor(.white)
+                .font(.system(size: 14, design: .monospaced))
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+                .accessibilityIdentifier("media_input_text_field")
+
+            if !mediaPath.isEmpty {
+                Button(action: { mediaPath = "" }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.white.opacity(0.4))
+                }
+            }
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 16)
+        .background(Color.white.opacity(0.06))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+        )
+    }
+}
+
+// ==============================================================================
+
+// MARK: - 4.2 动作触发按钮 (单一职责：解析加载状态与按钮交互)
+
+// ==============================================================================
 struct ActionButton: View {
     @ObservedObject var player: JJPlayer
     let action: () -> Void
@@ -208,53 +263,54 @@ struct ActionButton: View {
             .shadow(color: Color.blue.opacity(0.4), radius: 10, x: 0, y: 5)
         }
         .disabled(isPreparing)
+        .accessibilityIdentifier("start_probing_button")
     }
 }
 
-// MARK: - 4. 状态监测面板组件 (单一职责：状态机和解析结果分发)
+// ==============================================================================
 
+// MARK: - 5. 状态监测面板组件 (单一职责：分发并包裹具体状态面板)
+
+// ==============================================================================
 struct StatusPanel: View {
     @ObservedObject var player: JJPlayer
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // 状态栏头部
-            HStack {
-                Text("核心引擎状态机")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                Spacer()
+        GlassCard {
+            VStack(alignment: .leading, spacing: 16) {
+                // 状态栏头部
+                HStack {
+                    Text("核心引擎状态机")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                    Spacer()
 
-                StateBadge(state: player.state)
-            }
+                    StateBadge(state: player.state)
+                }
 
-            Divider()
-                .background(Color.white.opacity(0.1))
+                Divider()
+                    .background(Color.white.opacity(0.1))
 
-            // 根据播放器状态机进行视图切换 (功能单一的分发渲染)
-            switch player.state {
-            case .ready:
-                MetadataDetailsView(player: player)
-                    .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
-            case let .error(errorMsg):
-                ErrorPanel(errorMessage: errorMsg)
-            default:
-                IdleWaitingPanel()
+                // 根据状态机分发渲染子视图 (确保每种状态由完全单一职责的小 View 承担)
+                switch player.state {
+                case .ready, .playing, .paused, .completed:
+                    MetadataDetailsView(player: player)
+                        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
+                case let .error(errorMsg):
+                    ErrorPanel(errorMessage: errorMsg)
+                default:
+                    IdleWaitingPanel()
+                }
             }
         }
-        .padding(20)
-        .background(.ultraThinMaterial)
-        .cornerRadius(20)
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.2), radius: 15, x: 0, y: 10)
     }
 }
 
-// MARK: - 4.1 状态徽章组件 (单一职责：解析状态的文案和颜色)
+// ==============================================================================
 
+// MARK: - 5.1 状态徽章组件 (单一职责：解析状态的文案和颜色映射)
+
+// ==============================================================================
 struct StateBadge: View {
     let state: JJPlayerState
 
@@ -285,37 +341,29 @@ struct StateBadge: View {
     }
 }
 
-// MARK: - 4.2 元数据详情列表组件 (单一职责：解析成功后的多条属性显示)
+// ==============================================================================
 
+// MARK: - 5.2 元数据详情列表组件 (单一职责：解析成功后的多条属性垂直排版)
+
+// ==============================================================================
 struct MetadataDetailsView: View {
     @ObservedObject var player: JJPlayer
 
     var body: some View {
         VStack(spacing: 16) {
-            MetadataRow(title: "视频总时长", value: formatDuration(player.mediaDuration), icon: "clock.fill", color: .green)
+            // 调用沉淀在播放器 SDK 内部的 Double+Format 核心工具时间格式化扩展
+            MetadataRow(title: "视频总时长", value: player.mediaDuration.formattedDurationString, icon: "clock.fill", color: .green)
             MetadataRow(title: "视频分辨率", value: player.videoResolution, icon: "arrow.up.left.and.down.right.and.arrow.up.right.and.down.left", color: .orange)
-            MetadataRow(title: "视频编码格式", value: player.videoCodec.uppercased(), icon: "cpu.fill", color: .pink)
-        }
-    }
-
-    // 格式化时间为 mm:ss / hh:mm:ss
-    private func formatDuration(_ duration: Double) -> String {
-        guard duration > 0, !duration.isNaN, !duration.isInfinite else { return "00:00" }
-        let totalSeconds = Int(duration)
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
-        } else {
-            return String(format: "%02d:%02d", minutes, seconds)
+            MetadataRow(title: "视频编码格式", value: player.videoCodec.isEmpty ? "UNKNOWN" : player.videoCodec.uppercased(), icon: "cpu.fill", color: .pink)
         }
     }
 }
 
-// MARK: - 4.3 单个元数据数据行组件 (单一职责：渲染卡片内部的单条元数据属性)
+// ==============================================================================
 
+// MARK: - 5.3 单个元数据数据行组件 (单一职责：渲染单条属性细节卡片)
+
+// ==============================================================================
 struct MetadataRow: View {
     let title: String
     let value: String
@@ -349,8 +397,11 @@ struct MetadataRow: View {
     }
 }
 
-// MARK: - 4.4 错误提示面板组件 (单一职责：渲染探测失败信息)
+// ==============================================================================
 
+// MARK: - 5.4 错误提示面板组件 (单一职责：渲染探测失败的警告信息)
+
+// ==============================================================================
 struct ErrorPanel: View {
     let errorMessage: String
 
@@ -379,8 +430,11 @@ struct ErrorPanel: View {
     }
 }
 
-// MARK: - 4.5 空闲等待面板组件 (单一职责：未载入视频时的占位引导)
+// ==============================================================================
 
+// MARK: - 5.5 空闲等待面板组件 (单一职责：未载入视频时的引导提示)
+
+// ==============================================================================
 struct IdleWaitingPanel: View {
     var body: some View {
         VStack(spacing: 12) {
@@ -396,33 +450,161 @@ struct IdleWaitingPanel: View {
     }
 }
 
-// MARK: - 5. 学习笔记提示卡片组件 (单一职责：静态 FFmpeg 命令行知识说明)
+// ==============================================================================
 
+// MARK: - 6. 学习笔记提示卡片组件 (单一职责：静态 FFmpeg 命令行原理说明)
+
+// ==============================================================================
 struct StudyNotesCard: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("FFmpeg 学习笔记", systemImage: "lightbulb.fill")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.yellow)
+        GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("FFmpeg 学习笔记", systemImage: "lightbulb.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.yellow)
 
-            Text("当前已成功调通 FFmpegKit 导出的 FFprobe 底层接口。在 loadMedia() 中，我们异步执行了 FFprobe 探测命令，其底层实现机制类似于在 Shell 中执行：")
-                .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.7))
-                .lineSpacing(4)
+                Text("当前已成功调通 FFmpegKit 导出的 FFprobe 底层接口。在 loadMedia() 中，我们异步执行了 FFprobe 探测命令，其底层实现机制类似于在 Shell 中执行：")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.7))
+                    .lineSpacing(4)
 
-            Text("ffprobe -v error -show_entries stream=width,height,codec_name -show_entries format=duration -of default=noprint_wrappers=1 <URL>")
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .padding(10)
-                .background(Color.black.opacity(0.3))
-                .cornerRadius(8)
-                .foregroundColor(.green.opacity(0.9))
+                Text("ffprobe -v error -show_entries stream=width,height,codec_name -show_entries format=duration -of default=noprint_wrappers=1 <URL>")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .padding(10)
+                    .background(Color.black.opacity(0.3))
+                    .cornerRadius(8)
+                    .foregroundColor(.green.opacity(0.9))
+            }
         }
-        .padding(16)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
+    }
+}
+
+// ==============================================================================
+//
+
+// MARK: - 7. 视频播放渲染与拟物控制卡片组件 (单一职责：视频画面直出与播放控制)
+
+//
+// ==============================================================================
+struct VideoPlayerCard: View {
+    @ObservedObject var player: JJPlayer
+
+    var body: some View {
+        GlassCard {
+            VStack(spacing: 16) {
+                // 播放器视口头部标题与心跳指示灯
+                HStack {
+                    Label("GPU 硬件加速渲染视口", systemImage: "bolt.shield.fill")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundColor(.blue)
+
+                    Spacer()
+
+                    // 状态心跳灯
+                    if player.state == .playing {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 8, height: 8)
+                            .shadow(color: .green, radius: 4)
+                            .opacity(0.8)
+                    } else if player.state == .paused {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 8, height: 8)
+                            .shadow(color: .orange, radius: 4)
+                            .opacity(0.8)
+                    }
+                }
+
+                // 16:9 渲染底座，带有毛玻璃边缘和圆角
+                ZStack {
+                    Color.black.opacity(0.4)
+                        .aspectRatio(16 / 9, contentMode: .fit)
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        )
+
+                    // 硬件加速渲染图层
+                    JJSwiftUIPlayerView(player: player)
+                        .aspectRatio(16 / 9, contentMode: .fit)
+                        .cornerRadius(12)
+                        .clipped()
+
+                    // 暂停状态下的半透明遮罩与播放图标提示
+                    if player.state == .paused {
+                        ZStack {
+                            Color.black.opacity(0.3)
+                            Image(systemName: "pause.circle.fill")
+                                .font(.system(size: 50))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                        .aspectRatio(16 / 9, contentMode: .fit)
+                        .cornerRadius(12)
+                        .transition(.opacity)
+                    }
+                }
+
+                // 拟物播放控制台
+                HStack(spacing: 24) {
+                    // 停止并重置
+                    ControlButton(icon: "stop.fill", label: "停止", color: .red) {
+                        withAnimation(.spring()) {
+                            player.stop()
+                        }
+                    }
+
+                    // 播放/暂停双态按钮
+                    if player.state == .playing {
+                        ControlButton(icon: "pause.fill", label: "暂停", color: .orange) {
+                            player.pause()
+                        }
+                    } else {
+                        ControlButton(icon: "play.fill", label: "播放", color: .green) {
+                            player.play()
+                        }
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+    }
+}
+
+// ==============================================================================
+//
+
+// MARK: - 7.1 拟物控制按钮小组件
+
+//
+// ==============================================================================
+struct ControlButton: View {
+    let icon: String
+    let label: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .bold))
+                Text(label)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 10)
+            .background(
+                LinearGradient(
+                    colors: [color.opacity(0.8), color],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .cornerRadius(10)
+            .shadow(color: color.opacity(0.3), radius: 6, x: 0, y: 3)
+        }
     }
 }

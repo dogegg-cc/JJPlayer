@@ -6,6 +6,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <CoreVideo/CoreVideo.h>
 
 @interface JJFFmpegBridge : NSObject
 
@@ -24,4 +25,12 @@
 // 关闭输入源释放核心 C 对象资源
 - (void)close;
 
+// 【阶段二：视频解码与渲染】
+// 初始化并打开视频解码器上下文
+- (BOOL)initializeVideoDecoder:(NSError **)error;
+
+// 解码并提取下一帧视频图像，返回 iOS 原生的 CoreVideo 像素缓冲区 CVPixelBufferRef
+- (CVPixelBufferRef)decodeNextFrame;
+
 @end
+

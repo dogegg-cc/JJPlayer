@@ -62,4 +62,29 @@ public final class JJDemuxer {
     public func close() {
         bridge.close()
     }
+
+    // ==============================================================================
+
+    // MARK: - 【阶段二：视频解码与渲染桥接接口】
+
+    // ==============================================================================
+
+    /// 激活底层 C 语言视频解码通道，分配解码器上下文
+    public func initializeVideoDecoder() throws {
+        try bridge.initializeVideoDecoder()
+    }
+
+    /// 从媒体流中抽取数据包并解码出下一帧原始视频图像 (CVPixelBuffer)
+    ///
+    /// 【学习笔记 - Swift-C 混编的 Unmanaged 内存转移】
+    /// 在 C 世界分配的 CVPixelBufferRef 在 ObjC 桥接中返回时为 `Unmanaged<CVPixelBuffer>` 可选类型。
+    /// 在 Swift 中，我们必须使用 `takeRetainedValue()`。这句神奇的代码会向 Swift 编译器声明：
+    /// “将底层 C 分配的内存所有权直接移转并 Retain 给 Swift ARC 自动引用计数”。
+    /// 自此，这一块物理显存缓冲区将被 Swift 强安全接管，并在离开作用域时 100% 自动被 ARC 销毁，优雅杜绝了 C 级泄露。
+    ///
+    /// - Returns: 解码好的 iOS 硬件兼容像素缓冲区，若读完流或出错则返回 nil
+    public func decodeNextFrame() -> CVPixelBuffer? {
+        guard let unmanaged = bridge.decodeNextFrame() else { return nil }
+        return unmanaged.takeRetainedValue()
+    }
 }
