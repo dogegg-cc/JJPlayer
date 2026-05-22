@@ -44,6 +44,9 @@ public final class JJPlayer: ObservableObject {
     /// 解码线程是否已经全部读取解复用完成 (EOF)
     @Published public private(set) var isDecodingEOF: Bool = false
 
+    /// 播放器是否因为网络欠水位正在处于缓冲挂起 Loading 状态
+    @Published public private(set) var isLoading: Bool = false
+
     /// 音频播放物理音量（范围 0.0 ~ 1.0）
     @Published public var volume: Float = 1.0 {
         didSet {
@@ -125,6 +128,12 @@ public final class JJPlayer: ObservableObject {
         state = newState
     }
 
+    func updateLoadingStatus(_ loading: Bool) {
+        if isLoading != loading {
+            isLoading = loading
+        }
+    }
+
     func updateDecodingEOF(_ isEOF: Bool) {
         isDecodingEOF = isEOF
     }
@@ -160,6 +169,7 @@ public final class JJPlayer: ObservableObject {
         videoCodec = "Unknown"
         currentFrame = nil
         isDecodingEOF = false
+        isLoading = false
     }
 
     func updateBufferMetrics() {

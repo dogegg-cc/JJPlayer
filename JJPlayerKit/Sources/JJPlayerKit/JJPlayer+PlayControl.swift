@@ -38,6 +38,7 @@ extension JJPlayer {
         stopDisplayLink()
 
         changeState(to: .paused)
+        updateLoadingStatus(false)
         DebugLog("⏸ 音视频暂停播放。")
     }
 
@@ -45,6 +46,7 @@ extension JJPlayer {
     public func stop() {
         isPlayingLoop = false // 关闭循环标识，后台解码线程自适应退出
         updateDecodingEOF(false)
+        updateLoadingStatus(false)
 
         // 物理截断声卡发声，销毁 AudioQueue 管道与内存
         audioPlayer?.stop()

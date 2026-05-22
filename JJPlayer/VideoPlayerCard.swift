@@ -128,6 +128,27 @@ struct RenderViewportView: View {
                 .cornerRadius(12)
                 .transition(.opacity)
             }
+
+            // 💥 加载缓冲状态下的精美毛玻璃 Loading 遮罩
+            if player.isLoading {
+                ZStack {
+                    Color.black.opacity(0.45)
+
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(1.5)
+
+                        Text("网络数据缓冲中...")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.9))
+                            .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                    }
+                }
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .cornerRadius(12)
+                .transition(.opacity)
+            }
         }
     }
 }
