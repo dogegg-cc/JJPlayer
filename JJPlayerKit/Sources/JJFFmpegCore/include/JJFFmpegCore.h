@@ -23,6 +23,9 @@
 @property (nonatomic, copy) void (^onVideoFrameDecoded)(CVPixelBufferRef pixelBuffer, double pts);
 @property (nonatomic, copy) void (^onAudioFrameDecoded)(NSData *pcmData, double pts);
 
+// 物理网络缓存的最大已读取 PTS (秒)
+@property (nonatomic, assign) double maxReadPTS;
+
 // 打开多媒体输入源并探测流信息
 - (BOOL)openURL:(NSString *)url error:(NSError **)error;
 
@@ -37,5 +40,9 @@
 // 返回值：0 代表成功处理视频帧/音频帧；1 代表处理了无关数据包；-1 代表流读取结束(EOF)或出错
 - (int)decodeAndDispatch;
 
+// 物理 Seek 跳转接口
+- (BOOL)seekToTime:(double)seconds;
+
 @end
+
 

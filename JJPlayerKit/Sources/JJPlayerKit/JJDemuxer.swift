@@ -95,4 +95,17 @@ public final class JJDemuxer {
     public func decodeAndDispatch() -> Int32 {
         bridge.decodeAndDispatch()
     }
+
+    /// 底层解复用已读取的最大时间戳 (秒)，用于高精度计算网络下载/缓冲进度
+    public var maxReadPTS: Double {
+        bridge.maxReadPTS
+    }
+
+    /// 物理 Seek 跳转到指定时间戳位置（秒）
+    /// - Parameter seconds: 目标绝对秒数
+    /// - Returns: 是否跳转成功
+    @discardableResult
+    public func seek(to seconds: Double) -> Bool {
+        bridge.seek(toTime: seconds)
+    }
 }
