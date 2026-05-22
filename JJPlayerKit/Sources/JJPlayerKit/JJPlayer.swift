@@ -47,6 +47,9 @@ public final class JJPlayer: ObservableObject {
     /// 播放器是否因为网络欠水位正在处于缓冲挂起 Loading 状态
     @Published public private(set) var isLoading: Bool = false
 
+    /// 当前播放的是否为无限长直播流 (如 m3u8 直播)
+    @Published public private(set) var isLive: Bool = false
+
     /// 音频播放物理音量（范围 0.0 ~ 1.0）
     @Published public var volume: Float = 1.0 {
         didSet {
@@ -64,6 +67,9 @@ public final class JJPlayer: ObservableObject {
     /// 播放倍速（0.75, 1.0, 1.25, 1.5, 2.0, 3.0 等）
     @Published public var playbackRate: Float = 1.0 {
         didSet {
+            if isLive, playbackRate != 1.0 {
+                playbackRate = 1.0
+            }
             audioPlayer?.playbackRate = playbackRate
         }
     }
@@ -134,6 +140,15 @@ public final class JJPlayer: ObservableObject {
         }
     }
 
+    func updateLiveStatus(_ live: Bool) {
+        if isLive != live {
+            isLive = live
+            if live {
+                playbackRate = 1.0
+            }
+        }
+    }
+
     func updateDecodingEOF(_ isEOF: Bool) {
         isDecodingEOF = isEOF
     }
@@ -170,6 +185,7 @@ public final class JJPlayer: ObservableObject {
         currentFrame = nil
         isDecodingEOF = false
         isLoading = false
+        isLive = false
     }
 
     func updateBufferMetrics() {

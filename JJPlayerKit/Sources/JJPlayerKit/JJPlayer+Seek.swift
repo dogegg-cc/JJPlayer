@@ -10,7 +10,12 @@ import Foundation
 extension JJPlayer {
     /// 物理 Seek 跳转到指定时间点（秒），支持高精单帧物理预览与时钟重对齐
     public func seek(to seconds: Double) {
-        // 1. 状态防护：必须就绪或播放中，且已实例化解复用器
+        // 1. 状态防护：直播流物理拦截，必须就绪或播放中，且已实例化解复用器
+        guard !isLive else {
+            DebugLog("⚠️ [JJPlayer] 当前为直播流，物理拦截 Seek 跳转请求。")
+            return
+        }
+
         guard activeDemuxer != nil,
               state == .ready || state == .playing || state == .paused || state == .completed else { return }
 

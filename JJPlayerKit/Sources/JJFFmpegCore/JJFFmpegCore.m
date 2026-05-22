@@ -14,6 +14,7 @@
 #import <libswscale/swscale.h>
 #import <libswresample/swresample.h>
 #import <libavutil/channel_layout.h>
+#import <libavutil/opt.h>
 #import <CoreVideo/CoreVideo.h>
 
 @interface JJFFmpegBridge () {
@@ -98,7 +99,27 @@
     av_dict_set(&opts, "timeout", "10000000", 0); // 10秒连接超时
     av_dict_set(&opts, "user_agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 JJPlayer/1.0", 0);
     
-    AVFormatContext *ctx = NULL;
+    // A. 注入首开调优参数，防止致命崩溃并提升首开时间
+    av_dict_set(&opts, "http_persistent", "1", 0);           // TCP 链路复用 (Keep-Alive)
+    av_dict_set(&opts, "probesize", "150000", 0);            // 150KB 极轻量嗅探
+    av_dict_set(&opts, "max_analyze_duration", "500000", 0); // 500ms 嗅探超时上限
+    av_dict_set(&opts, "fflags", "nobuffer", 0);             // 无缓冲
+    av_dict_set(&opts, "scan_all_pmts", "0", 0);             // 关闭全部 PMT 扫描
+    
+    // B. 预分配 AVFormatContext 并直接在结构体上设置 max_streams（比字典传参更可靠）
+    AVFormatContext *ctx = avformat_alloc_context();
+    if (!ctx) {
+        av_dict_free(&opts);
+        if (error) {
+            *error = [NSError errorWithDomain:@"JJFFmpegBridge" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"FFmpeg: 无法分配 AVFormatContext"}];
+        }
+        return NO;
+    }
+    ctx->max_streams = 100; // 直接写入结构体，100% 确保 HLS demuxer 不会因流数量超限崩溃
+    
+    // C. 显式放行协议白名单：本地提纯 m3u8 文件内嵌 HTTPS 子链接，必须放行 https/tls/tcp
+    av_opt_set(ctx, "protocol_whitelist", "file,http,https,tls,tcp,crypto,data", 0);
+    
     int ret = avformat_open_input(&ctx, [url UTF8String], NULL, &opts);
     av_dict_free(&opts);
     
@@ -113,6 +134,27 @@
     }
     
     _formatContext = ctx;
+    
+    // B. 物理流过滤拦截：仅保留首个视频和首个音频流，其余物理 discard 掉，极速起播
+    int video_count = 0;
+    int audio_count = 0;
+    for (unsigned int i = 0; i < ctx->nb_streams; i++) {
+        AVStream *stream = ctx->streams[i];
+        if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            video_count++;
+            if (video_count > 1) {
+                stream->discard = AVDISCARD_ALL;
+            }
+        } else if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+            audio_count++;
+            if (audio_count > 1) {
+                stream->discard = AVDISCARD_ALL;
+            }
+        } else {
+            stream->discard = AVDISCARD_ALL;
+        }
+    }
+    
     ret = avformat_find_stream_info(ctx, NULL);
     if (ret < 0) {
         [self close];

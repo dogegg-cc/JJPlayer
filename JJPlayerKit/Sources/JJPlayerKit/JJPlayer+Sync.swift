@@ -64,59 +64,91 @@ extension JJPlayer {
     @objc func updateSyncLoop() {
         guard state == .playing else { return }
 
-        // 💥 自适应缓冲下溢挂起与充盈恢复判定
-        if !isDecodingEOF {
-            let audioSize = getAudioBufferSize()
-            videoQueueLock.lock()
-            let videoCount = videoFrameQueue.count
-            videoQueueLock.unlock()
+        // 1. 自适应缓冲下溢挂起与充盈恢复判定
+        evaluateBufferingState()
 
-            if !isLoading {
-                // 1. 下溢挂起评估：当视频帧消耗完，且音频缓冲区 PCM 数据接近耗尽（小于 32KB），
-                //    代表即将卡顿，应立即启动缓冲挂起 Loading，并暂停声卡以防止杂音和空耗。
-                if videoCount == 0, audioSize < 32 * 1024 {
-                    updateLoadingStatus(true)
-                    audioPlayer?.pause()
-                    DebugLog("⚠️ [JJPlayer] 检测到缓冲区下溢 (Audio: \(audioSize)B, Video: 0)，挂起播放以进行网络数据缓冲...")
-                }
-            } else {
-                // 2. 充盈恢复评估：若在挂起中，当缓冲积攒够 8 帧视频且音频达到 128KB (可流畅播放 0.5s 以上时)，
-                //    恢复播放，重新物理启动声卡。
-                if videoCount >= 8, audioSize >= 128 * 1024 {
-                    updateLoadingStatus(false)
-                    audioPlayer?.play()
-                    DebugLog("✅ [JJPlayer] 缓冲区已充盈 (Audio: \(audioSize)B, Video: \(videoCount))，继续流畅播放...")
-                }
-            }
-        }
-
-        // 💥 若处于 Loading 挂起状态下，为了防止时钟乱跑或强行消费，仅在主线程更新缓冲条进度并直接返回！
+        // 若处于 Loading 挂起状态下，为了防止时钟乱跑，仅在主线程更新缓冲条进度并直接返回！
         if isLoading {
             updateBufferMetrics()
             return
         }
 
-        // 1. 获取最精确 of 音频发声时钟 (Audio Primary Clock)
-        let audioClock = getAudioPrimaryClock()
-
-        // 💥 随屏幕刷新在主线程安全更新响应式参数，彻底抛弃外部脏轮询 Timer！
+        // 2. 获取并更新精确的音频发声时钟
+        var audioClock = getAudioPrimaryClock()
         updateCurrentTime(audioClock)
         updateBufferMetrics()
 
+        // 3. 执行画面同步与丢帧渲染
+        renderAndSyncFrames(audioClock: &audioClock)
+
+        // 4. 消费完毕状态机平滑闭环检测 (直播流不触发正常播放完毕状态机流转)
+        if !isLive, isDecodingEOF, videoFrameQueue.isEmpty, getAudioBufferSize() == 0 {
+            DebugLog("🎉 缓冲区数据完全消费完毕，音视频同步流畅步入 .completed 状态。")
+            changeState(to: .completed)
+            audioPlayer?.pause()
+            stopDisplayLink()
+            updateDecodingEOF(false)
+        }
+    }
+
+    /// 💥 自适应缓冲下溢挂起与充盈恢复判定 (SRP)
+    private func evaluateBufferingState() {
+        guard !isDecodingEOF else { return }
+
+        let audioSize = getAudioBufferSize()
+        videoQueueLock.lock()
+        let videoCount = videoFrameQueue.count
+        videoQueueLock.unlock()
+
+        if !isLoading {
+            // 1. 下溢挂起评估：音频或视频接近耗尽时挂起，暂停声卡
+            if videoCount == 0, audioSize < 32 * 1024 {
+                updateLoadingStatus(true)
+                audioPlayer?.pause()
+                DebugLog("⚠️ [JJPlayer] 检测到缓冲区下溢 (Audio: \(audioSize)B, Video: 0)，挂起播放...")
+            }
+        } else {
+            // 2. 充盈恢复评估：缓冲积攒足够时唤醒，重新物理启动声卡
+            if videoCount >= 8, audioSize >= 128 * 1024 {
+                updateLoadingStatus(false)
+                audioPlayer?.play()
+                DebugLog("✅ [JJPlayer] 缓冲区已充盈 (Audio: \(audioSize)B, Video: \(videoCount))，继续播放...")
+            }
+        }
+    }
+
+    /// 💥 画面音视频同步与丢帧渲染 (SRP)
+    private func renderAndSyncFrames(audioClock: inout Double) {
         videoQueueLock.lock()
         defer { videoQueueLock.unlock() }
 
-        // 2. 双向快速追赶决策
+        // A. 直播时钟突变 Discontinuity 自修复
+        if isLive, !videoFrameQueue.isEmpty {
+            let nextFrame = videoFrameQueue[0]
+            let diff = nextFrame.pts - audioClock
+            if abs(diff) > 2.0 {
+                audioPtsLock.lock()
+                let playTime = audioPlayer?.currentPlaybackTime ?? 0.0
+                firstAudioPTS = nextFrame.pts - playTime
+                audioPtsLock.unlock()
+
+                audioClock = nextFrame.pts
+                updateCurrentTime(audioClock)
+                DebugLog("⚠️ [JJPlayer] 直播流时钟突变 (Diff: \(diff)s)，已物理重算 firstAudioPTS 进行声画对齐。")
+            }
+        }
+
+        // B. 双向快速追赶决策
         while !videoFrameQueue.isEmpty {
             let nextFrame = videoFrameQueue[0]
             let diff = nextFrame.pts - audioClock
 
             if diff < -0.04 {
-                // A. 视频帧落后于音频超过 40ms：表示该画面已经过时，果断执行【快速丢帧】！
+                // A. 视频帧落后于音频超过 40ms：该画面已过时，丢帧
                 videoFrameQueue.removeFirst()
                 continue
             } else if diff > 0.04 {
-                // B. 视频帧超前于音频超过 40ms：说明画面超前声音，音频还没播放到这一秒
+                // B. 视频帧超前于音频超过 40ms：画面超前声音，挂起等待
                 break
             } else {
                 // C. 完美落入声画极精对齐区间 [-40ms, 40ms]
@@ -126,8 +158,8 @@ extension JJPlayer {
             }
         }
 
-        // 3. 消费完毕状态机平滑闭环检测
-        if isDecodingEOF, videoFrameQueue.isEmpty, getAudioBufferSize() == 0 {
+        // 3. 消费完毕状态机平滑闭环检测 (直播流不触发正常播放完毕状态机流转)
+        if !isLive, isDecodingEOF, videoFrameQueue.isEmpty, getAudioBufferSize() == 0 {
             DebugLog("🎉 缓冲区数据完全消费完毕，音视频同步流畅步入 .completed 状态。")
             changeState(to: .completed)
             audioPlayer?.pause()

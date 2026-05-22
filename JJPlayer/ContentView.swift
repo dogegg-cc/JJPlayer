@@ -18,7 +18,7 @@ struct ContentView: View {
     @StateObject private var player = JJPlayer()
 
     // 输入的媒体路径或网络 URL，默认提供西瓜播放器的高速国内测试视频
-    @State private var mediaPath: String = "https://www.w3schools.com/html/mov_bbb.mp4"
+    @State private var mediaPath: String = "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_adv_example_hevc/master.m3u8"
 
     // 动画状态控制
     @State private var isAnalyzing: Bool = false

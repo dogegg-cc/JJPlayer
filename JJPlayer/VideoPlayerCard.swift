@@ -165,55 +165,107 @@ struct PlaybackSliderView: View {
     @Binding var isDraggingSlider: Bool
     @Binding var sliderValue: Double
 
+    @State private var dotOpacity: Double = 1.0
+
     var body: some View {
         VStack(spacing: 6) {
-            HStack {
-                // 当前播放位置（若在拖拽中，展示拖拽值；否则展示真实的播放进度）
-                Text((isDraggingSlider ? sliderValue : player.currentTime).formattedDurationString)
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.8))
+            if player.isLive {
+                // 直播自适应拟物组件
+                HStack(spacing: 12) {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 8, height: 8)
+                            .shadow(color: .red, radius: 4)
+                            .opacity(dotOpacity)
+                            .onAppear {
+                                withAnimation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                                    dotOpacity = 0.3
+                                }
+                            }
 
-                Spacer()
+                        Text("LIVE 直播中")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.red.opacity(0.15))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.red.opacity(0.35), lineWidth: 1)
+                    )
 
-                // 高精度网络流缓冲水位提示
-                Text(String(format: "已缓冲 %.1f%%", player.bufferProgress * 100.0))
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(.blue.opacity(0.8))
+                    Spacer()
 
-                Spacer()
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.fill")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.4))
+                        Text("已播时长: \(player.currentTime.formattedDurationString)")
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.white.opacity(0.04))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+                }
+                .padding(.vertical, 6)
+            } else {
+                HStack {
+                    // 当前播放位置（若在拖拽中，展示拖拽值；否则展示真实的播放进度）
+                    Text((isDraggingSlider ? sliderValue : player.currentTime).formattedDurationString)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.8))
 
-                // 媒体总长度
-                Text(player.mediaDuration.formattedDurationString)
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.6))
-            }
+                    Spacer()
 
-            // 精美双层轨道进度 Slider
-            ZStack(alignment: .leading) {
-                // 1. 底层：整体背景轨
-                Capsule()
-                    .fill(Color.white.opacity(0.12))
+                    // 高精度网络流缓冲水位提示
+                    Text(String(format: "已缓冲 %.1f%%", player.bufferProgress * 100.0))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundColor(.blue.opacity(0.8))
+
+                    Spacer()
+
+                    // 媒体总长度
+                    Text(player.mediaDuration.formattedDurationString)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+
+                // 精美双层轨道进度 Slider
+                ZStack(alignment: .leading) {
+                    // 1. 底层：整体背景轨
+                    Capsule()
+                        .fill(Color.white.opacity(0.12))
+                        .frame(height: 6)
+
+                    // 2. 中层：网络缓冲指示条
+                    GeometryReader { geometry in
+                        Capsule()
+                            .fill(Color.blue.opacity(0.35))
+                            .frame(width: geometry.size.width * CGFloat(player.bufferProgress), height: 6)
+                    }
                     .frame(height: 6)
 
-                // 2. 中层：网络缓冲指示条
-                GeometryReader { geometry in
-                    Capsule()
-                        .fill(Color.blue.opacity(0.35))
-                        .frame(width: geometry.size.width * CGFloat(player.bufferProgress), height: 6)
-                }
-                .frame(height: 6)
-
-                // 3. 顶层：原生拖拽 Slider，双向绑定防抖设计，拖拽完成后触发 Seek 引擎
-                Slider(value: isDraggingSlider ? $sliderValue : Binding(
-                    get: { player.currentTime },
-                    set: { sliderValue = $0 }
-                ), in: 0 ... max(1.0, player.mediaDuration)) { editing in
-                    isDraggingSlider = editing
-                    if !editing {
-                        player.seek(to: sliderValue)
+                    // 3. 顶层：原生拖拽 Slider，双向绑定防抖设计，拖拽完成后触发 Seek 引擎
+                    Slider(value: isDraggingSlider ? $sliderValue : Binding(
+                        get: { player.currentTime },
+                        set: { sliderValue = $0 }
+                    ), in: 0 ... max(1.0, player.mediaDuration)) { editing in
+                        isDraggingSlider = editing
+                        if !editing {
+                            player.seek(to: sliderValue)
+                        }
                     }
+                    .accentColor(.blue)
                 }
-                .accentColor(.blue)
             }
         }
     }
@@ -287,40 +339,57 @@ struct PlaybackRateSelector: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("播放倍速 (变速不变调高保真发声)")
+            Text(player.isLive ? "播放倍速 (直播锁定 1.0x)" : "播放倍速 (变速不变调高保真发声)")
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundColor(.white.opacity(0.5))
 
-            HStack(spacing: 8) {
-                ForEach(rates, id: \.self) { rate in
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                            player.playbackRate = rate
-                        }
-                    }) {
-                        Text(String(format: "%.2fx", rate))
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(player.playbackRate == rate ? .white : .white.opacity(0.7))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(
-                                Group {
-                                    if player.playbackRate == rate {
-                                        LinearGradient(
-                                            colors: [.blue, .purple],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    } else {
-                                        Color.white.opacity(0.06)
+            if player.isLive {
+                // 直播锁定展示
+                HStack {
+                    Text("1.00x (直播流保护性锁定)")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.6))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.04))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        )
+                }
+            } else {
+                HStack(spacing: 8) {
+                    ForEach(rates, id: \.self) { rate in
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                player.playbackRate = rate
+                            }
+                        }) {
+                            Text(String(format: "%.2fx", rate))
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(player.playbackRate == rate ? .white : .white.opacity(0.7))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Group {
+                                        if player.playbackRate == rate {
+                                            LinearGradient(
+                                                colors: [.blue, .purple],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        } else {
+                                            Color.white.opacity(0.06)
+                                        }
                                     }
-                                }
-                            )
-                            .cornerRadius(8)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(player.playbackRate == rate ? Color.blue.opacity(0.4) : Color.white.opacity(0.08), lineWidth: 1)
-                            )
+                                )
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(player.playbackRate == rate ? Color.blue.opacity(0.4) : Color.white.opacity(0.08), lineWidth: 1)
+                                )
+                        }
                     }
                 }
             }
