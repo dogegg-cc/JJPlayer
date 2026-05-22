@@ -96,6 +96,12 @@ extension JJPlayer {
                     self?.updateDecodingEOF(true)
                 }
                 break
+            } else if status == -2 {
+                // 发生网络或底层读取异常错误，不标志 EOF，直接切入 error 状态优雅中止
+                DispatchQueue.main.async { [weak self] in
+                    self?.changeState(to: .error("网络连接中断或读取媒体数据失败"))
+                }
+                break
             }
         }
     }

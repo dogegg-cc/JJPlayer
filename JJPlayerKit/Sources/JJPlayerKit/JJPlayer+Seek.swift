@@ -76,7 +76,7 @@ extension JJPlayer {
         // 最多尝试解码 20 次，拉取出 Seek 后的最近一帧画面
         for _ in 0 ..< 20 {
             let status = demuxer.decodeAndDispatch()
-            if status == -1 { break } // EOF
+            if status < 0 { break } // EOF 或 I/O 错误
 
             videoQueueLock.lock()
             let hasFrame = !videoFrameQueue.isEmpty

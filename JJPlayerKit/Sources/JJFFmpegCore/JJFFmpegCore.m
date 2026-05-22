@@ -91,8 +91,17 @@
 - (BOOL)openURL:(NSString *)url error:(NSError **)error {
     [self close];
     
+    AVDictionary *opts = NULL;
+    av_dict_set(&opts, "reconnect", "1", 0);
+    av_dict_set(&opts, "reconnect_streamed", "1", 0);
+    av_dict_set(&opts, "reconnect_delay_max", "5", 0);
+    av_dict_set(&opts, "timeout", "10000000", 0); // 10秒连接超时
+    av_dict_set(&opts, "user_agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 JJPlayer/1.0", 0);
+    
     AVFormatContext *ctx = NULL;
-    int ret = avformat_open_input(&ctx, [url UTF8String], NULL, NULL);
+    int ret = avformat_open_input(&ctx, [url UTF8String], NULL, &opts);
+    av_dict_free(&opts);
+    
     if (ret != 0) {
         if (error) {
             char errbuf[1024];
@@ -359,7 +368,11 @@
         
         int ret = av_read_frame(self->_formatContext, self->_packet);
         if (ret < 0) {
-            return -1; // EOF 或 I/O 中断
+            if (ret == AVERROR_EOF) {
+                return -1; // 真正的正常播放完毕 (EOF)
+            } else {
+                return -2; // 异常的网络断开/读取错误 (I/O)
+            }
         }
         
         if (self->_packet->pts != AV_NOPTS_VALUE) {
