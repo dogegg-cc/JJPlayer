@@ -43,6 +43,9 @@
     NSString *_videoCodecName;
     NSString *_audioCodecName;
     double _maxReadPTS;
+    
+    // I/O 中断控制标志（volatile 确保跨线程立即可见，@package 使同文件 C 函数可访问）
+    @package volatile int _abortRequested;
 }
 
 // 内部声明私有的视频 YUV 转 RGB CVPixelBuffer 助手方法签名
@@ -55,6 +58,13 @@
 - (void)resetDecoders;
 
 @end
+
+// FFmpeg I/O 中断回调：返回 1 时立即中断 av_read_frame 等阻塞 I/O 操作
+static int interruptCallback(void *opaque) {
+    JJFFmpegBridge *bridge = (__bridge JJFFmpegBridge *)opaque;
+    if (bridge == nil) return 1;
+    return bridge->_abortRequested;
+}
 
 @implementation JJFFmpegBridge
 
@@ -81,6 +91,7 @@
         _videoCodecName = @"Unknown";
         _audioCodecName = @"Unknown";
         _maxReadPTS = 0.0;
+        _abortRequested = 0;
     }
     return self;
 }
@@ -95,16 +106,20 @@
     AVDictionary *opts = NULL;
     av_dict_set(&opts, "reconnect", "1", 0);
     av_dict_set(&opts, "reconnect_streamed", "1", 0);
+    av_dict_set(&opts, "reconnect_at_eof", "1", 0);       // 断点续连
     av_dict_set(&opts, "reconnect_delay_max", "5", 0);
     av_dict_set(&opts, "timeout", "10000000", 0); // 10秒连接超时
     av_dict_set(&opts, "user_agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 JJPlayer/1.0", 0);
-    
-    // A. 注入首开调优参数，防止致命崩溃并提升首开时间
     av_dict_set(&opts, "http_persistent", "1", 0);           // TCP 链路复用 (Keep-Alive)
-    av_dict_set(&opts, "probesize", "150000", 0);            // 150KB 极轻量嗅探
-    av_dict_set(&opts, "max_analyze_duration", "500000", 0); // 500ms 嗅探超时上限
-    av_dict_set(&opts, "fflags", "nobuffer", 0);             // 无缓冲
-    av_dict_set(&opts, "scan_all_pmts", "0", 0);             // 关闭全部 PMT 扫描
+    
+    // A. 仅对 HLS/m3u8 注入激进首开参数（普通 MP4 使用 FFmpeg 默认宽裕值）
+    BOOL isHLS = [url containsString:@".m3u8"] || [url containsString:@"pure_variant"];
+    if (isHLS) {
+        av_dict_set(&opts, "probesize", "150000", 0);            // 150KB 极轻量嗅探
+        av_dict_set(&opts, "max_analyze_duration", "500000", 0); // 500ms 嗅探超时上限
+        av_dict_set(&opts, "fflags", "nobuffer", 0);             // 无缓冲（低延迟直播）
+        av_dict_set(&opts, "scan_all_pmts", "0", 0);             // 关闭全部 PMT 扫描
+    }
     
     // B. 预分配 AVFormatContext 并直接在结构体上设置 max_streams（比字典传参更可靠）
     AVFormatContext *ctx = avformat_alloc_context();
@@ -117,8 +132,16 @@
     }
     ctx->max_streams = 100; // 直接写入结构体，100% 确保 HLS demuxer 不会因流数量超限崩溃
     
-    // C. 显式放行协议白名单：本地提纯 m3u8 文件内嵌 HTTPS 子链接，必须放行 https/tls/tcp
-    av_opt_set(ctx, "protocol_whitelist", "file,http,https,tls,tcp,crypto,data", 0);
+    // C. 仅对本地文件设置协议白名单（提纯 m3u8 内嵌 HTTPS 子链接需要放行）
+    //    直接的 HTTPS URL 不需要设置，FFmpeg 内部自动处理协议链路
+    if ([url hasPrefix:@"/"]) {
+        av_opt_set(ctx, "protocol_whitelist", "file,http,https,tls,tcp,crypto,data", 0);
+    }
+    
+    // D. 注册 I/O 中断回调：close() 时置 _abortRequested=1，让 av_read_frame 立即中断返回
+    _abortRequested = 0;
+    ctx->interrupt_callback.callback = interruptCallback;
+    ctx->interrupt_callback.opaque = (__bridge void *)self;
     
     int ret = avformat_open_input(&ctx, [url UTF8String], NULL, &opts);
     av_dict_free(&opts);
@@ -196,6 +219,9 @@
 }
 
 - (void)close {
+    // 先置中断标志，让卡在 I/O 重连循环中的 av_read_frame 立即返回
+    _abortRequested = 1;
+    
     @synchronized (self) {
         [self resetDecoders];
         

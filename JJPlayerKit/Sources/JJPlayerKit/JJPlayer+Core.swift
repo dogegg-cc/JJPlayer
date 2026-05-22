@@ -15,6 +15,10 @@ extension JJPlayer {
     ///
     /// - Parameter path: 本地视频文件的绝对路径或网络流 URL
     public func loadMedia(path: String) {
+        // 💥 先彻底清理旧的播放状态（停止 decode loop、关闭旧 demuxer、释放声卡）
+        // 避免旧的网络连接和 I/O 重试阻塞干扰新视频加载
+        stop()
+
         changeState(to: .preparing)
         DebugLog("🔄 正在载入媒体文件: \(path)")
 

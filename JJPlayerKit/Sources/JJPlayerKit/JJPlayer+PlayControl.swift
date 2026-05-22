@@ -82,15 +82,20 @@ extension JJPlayer {
 
     /// 💥【SRP 拆分：解码轮询决策循环】
     private func runDecodeLoop() {
+        var ioRetryCount = 0
+        let maxIORetries = 3
+
         while true {
-            // 💥 修改为：只要解复用器存在，且处于就绪/播放/暂停状态，均允许解码预缓冲
-            guard let demuxer = activeDemuxer,
+            // 💥 必须检查 isPlayingLoop：stop() 会置 false 以中断循环
+            guard isPlayingLoop,
+                  let demuxer = activeDemuxer,
                   state == .playing || state == .paused || state == .ready else { break }
 
             // 一站式从底层多媒体流中提取、解码并分发单个数据包
             let status = demuxer.decodeAndDispatch()
 
             if status == 0 {
+                ioRetryCount = 0 // 成功读取，重置重试计数
                 applyFlowControl()
             } else if status == -1 {
                 // 读完视频包，标志 EOF，通知主线程
@@ -99,7 +104,15 @@ extension JJPlayer {
                 }
                 break
             } else if status == -2 {
-                // 发生网络或底层读取异常错误，不标志 EOF，直接切入 error 状态优雅中止
+                // 网络 I/O 瞬断——等待后重试，而非立即放弃
+                ioRetryCount += 1
+                if ioRetryCount <= maxIORetries {
+                    DebugLog("⚠️ [JJPlayer] 网络 I/O 错误，第 \(ioRetryCount)/\(maxIORetries) 次重试中...")
+                    Thread.sleep(forTimeInterval: 1.0)
+                    continue
+                }
+                // 连续多次重试均失败，才切入 error 状态
+                DebugLog("❌ [JJPlayer] 网络 I/O 连续 \(maxIORetries) 次重试失败，停止播放。")
                 DispatchQueue.main.async { [weak self] in
                     self?.changeState(to: .error("网络连接中断或读取媒体数据失败"))
                 }
